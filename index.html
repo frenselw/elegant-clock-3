@@ -319,6 +319,126 @@
             color: var(--second-hand-light);
         }
 
+        /* Timezone Modal Styles */
+        #timezoneModal .modal-content {
+            max-width: 420px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #timezoneModal .modal-content h2 {
+            margin-bottom: 10px;
+            font-size: 1.4em;
+        }
+
+        .tz-search-input {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.08);
+            color: var(--text-dark);
+            font-size: 14px;
+            outline: none;
+            box-sizing: border-box;
+            margin-bottom: 12px;
+            transition: border-color 0.3s;
+        }
+
+        .tz-search-input:focus {
+            border-color: var(--second-hand-dark);
+        }
+
+        body.light-mode .tz-search-input {
+            background: rgba(0,0,0,0.05);
+            color: var(--text-light);
+            border-color: rgba(0,0,0,0.15);
+        }
+
+        .tz-list {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 50vh;
+            padding: 0;
+            margin: 0;
+            list-style: none;
+        }
+
+        .tz-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .tz-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .tz-list::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+        }
+
+        body.light-mode .tz-list::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.15);
+        }
+
+        .tz-item {
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tz-item:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        body.light-mode .tz-item:hover {
+            background: rgba(0,0,0,0.06);
+        }
+
+        .tz-item.active {
+            background: rgba(255, 75, 92, 0.2);
+            border: 1px solid rgba(255, 75, 92, 0.4);
+        }
+
+        .tz-item .tz-name {
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .tz-item .tz-time {
+            font-size: 13px;
+            opacity: 0.7;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .timezone-label {
+            position: fixed;
+            bottom: 3vh;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: var(--text-dark);
+            opacity: 0.5;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+            transition: color 0.5s, opacity 0.3s;
+            cursor: pointer;
+            z-index: 50;
+        }
+
+        .timezone-label:hover {
+            opacity: 0.8;
+        }
+
+        body.light-mode .timezone-label {
+            color: var(--text-light);
+        }
+
     </style>
 </head>
 <body>
@@ -334,11 +454,14 @@
 
     <div class="controls">
         <button id="toggleClockBtn" title="Toggle Clock"></button>
+        <button id="timezoneBtn" title="Timezone"></button>
         <button id="fullscreenBtn" title="Toggle Fullscreen"></button>
         <button id="toggleModeBtn" title="Toggle Theme"></button>
         <button id="styleBtn" title="Change Style"></button>
         <button id="aboutBtn" title="About"></button>
     </div>
+
+    <div class="timezone-label" id="timezoneLabel">UTC+8 · 本地时间</div>
 
     <div id="aboutModal" class="modal-overlay">
         <div class="modal-content">
@@ -348,6 +471,14 @@
                 This software is open-source, licensed under the 
                 <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer">GNU AGPLv3</a>.
             </p>
+        </div>
+    </div>
+
+    <div id="timezoneModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>🌍 选择时区</h2>
+            <input type="text" class="tz-search-input" id="tzSearch" placeholder="搜索城市或时区..." />
+            <ul class="tz-list" id="tzList"></ul>
         </div>
     </div>
 
@@ -369,10 +500,16 @@
         const styleBtn = document.getElementById('styleBtn');
         const aboutBtn = document.getElementById('aboutBtn');
         const aboutModal = document.getElementById('aboutModal');
+        const timezoneBtn = document.getElementById('timezoneBtn');
+        const timezoneModal = document.getElementById('timezoneModal');
+        const tzSearch = document.getElementById('tzSearch');
+        const tzList = document.getElementById('tzList');
+        const timezoneLabel = document.getElementById('timezoneLabel');
 
         let isAnalog = true;
         let styleIndex = 0;
         const clockStyles = ['default', 'luxury', 'minimal', 'guofeng'];
+        let selectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai';
 
         const icons = {
             analog: `<svg viewBox="0 0 24 24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"></path><path d="M13 7h-2v5.414l3.293 3.293 1.414-1.414L13 11.586z"></path></svg>`,
@@ -382,14 +519,17 @@
             fullscreenExit: `<svg viewBox="0 0 24 24"><path d="M3 9h2V5h4V3H3zm16 0h2V5h-4V3h6v6zM9 21h2v-4h4v-2H9zm12-6h-2v4h-4v2h6z"></path></svg>`,
             sun: `<svg viewBox="0 0 24 24"><path d="M12 2c5.514 0 10 4.486 10 10s-4.486 10-10 10S2 17.514 2 12 6.486 2 12 2zM4 12c0 1.846.634 3.543 1.688 4.898l8.414-8.414A7.962 7.962 0 0 0 12 4c-4.411 0-8 3.589-8 8zm8 8c1.846 0 3.543-.634 4.898-1.688l-8.414-8.414A7.962 7.962 0 0 0 4 12c0 4.411 3.589 8 8 8z"></path></svg>`,
             moon: `<svg viewBox="0 0 24 24"><path d="M12 20a8 8 0 1 1 8-8 8.009 8.009 0 0 1-8 8zm0-18A10 10 0 1 0 22 12 10 10 0 0 0 12 2z"></path></svg>`,
-            info: `<svg viewBox="0 0 24 24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"></path><path d="M11 11h2v6h-2zm0-4h2v2h-2z"></path></svg>`
+            info: `<svg viewBox="0 0 24 24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"></path><path d="M11 11h2v6h-2zm0-4h2v2h-2z"></path></svg>`,
+            globe: `<svg viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm6.918 6h-3.215a14.9 14.9 0 0 0-1.247-3.668A8.015 8.015 0 0 1 18.918 8zM12 4.04c.702.992 1.268 2.12 1.66 3.34H10.34A13.87 13.87 0 0 1 12 4.04zM4.26 14a7.9 7.9 0 0 1 0-4h3.692a16.4 16.4 0 0 0 0 4H4.26zm.822 2h3.215a14.9 14.9 0 0 0 1.247 3.668A8.015 8.015 0 0 1 5.082 16zm3.215-8H5.082a8.015 8.015 0 0 1 4.462-3.668A14.9 14.9 0 0 0 8.297 8zM12 19.96a13.87 13.87 0 0 1-1.66-3.34h3.32A13.87 13.87 0 0 1 12 19.96zM14.293 14H9.707a14.4 14.4 0 0 1 0-4h4.586a14.4 14.4 0 0 1 0 4zm.493 5.668A14.9 14.9 0 0 0 16.033 16h3.215a8.015 8.015 0 0 1-4.462 3.668zM19.768 14h-3.692a16.4 16.4 0 0 0 0-4h3.692a7.9 7.9 0 0 1 0 4z"></path></svg>`
         };
         
         function setDate() {
             const now = new Date();
-            const seconds = now.getSeconds();
-            const minutes = now.getMinutes();
-            const hours = now.getHours();
+            const tzOptions = { timeZone: selectedTimezone };
+
+            const seconds = parseInt(new Intl.DateTimeFormat('en', { ...tzOptions, second: 'numeric' }).format(now));
+            const minutes = parseInt(new Intl.DateTimeFormat('en', { ...tzOptions, minute: 'numeric' }).format(now));
+            const hours = parseInt(new Intl.DateTimeFormat('en', { ...tzOptions, hour: 'numeric', hour12: false }).format(now));
 
             const secondsDegrees = (seconds / 60) * 360;
             secondHand.style.transform = `rotate(${secondsDegrees}deg)`;
@@ -466,6 +606,98 @@
             styleBtn.title = `Style: ${nextStyle === 'default' ? 'Elegant' : nextStyle.charAt(0).toUpperCase() + nextStyle.slice(1)}`;
         }
 
+        const timezones = [
+            { id: 'Pacific/Midway',        label: '中途岛',           region: '太平洋' },
+            { id: 'Pacific/Honolulu',      label: '夏威夷',           region: '太平洋' },
+            { id: 'America/Anchorage',     label: '安克雷奇',         region: '北美洲' },
+            { id: 'America/Los_Angeles',   label: '洛杉矶',           region: '北美洲' },
+            { id: 'America/Denver',        label: '丹佛',             region: '北美洲' },
+            { id: 'America/Chicago',       label: '芝加哥',           region: '北美洲' },
+            { id: 'America/New_York',      label: '纽约',             region: '北美洲' },
+            { id: 'America/Sao_Paulo',     label: '圣保罗',           region: '南美洲' },
+            { id: 'America/Argentina/Buenos_Aires', label: '布宜诺斯艾利斯', region: '南美洲' },
+            { id: 'Atlantic/South_Georgia', label: '南乔治亚',         region: '大西洋' },
+            { id: 'Atlantic/Azores',       label: '亚速尔群岛',       region: '大西洋' },
+            { id: 'Europe/London',         label: '伦敦',             region: '欧洲' },
+            { id: 'Europe/Paris',          label: '巴黎',             region: '欧洲' },
+            { id: 'Europe/Berlin',         label: '柏林',             region: '欧洲' },
+            { id: 'Europe/Moscow',         label: '莫斯科',           region: '欧洲' },
+            { id: 'Europe/Istanbul',       label: '伊斯坦布尔',       region: '欧洲' },
+            { id: 'Africa/Cairo',          label: '开罗',             region: '非洲' },
+            { id: 'Africa/Johannesburg',   label: '约翰内斯堡',       region: '非洲' },
+            { id: 'Asia/Dubai',            label: '迪拜',             region: '亚洲' },
+            { id: 'Asia/Kolkata',          label: '加尔各答',         region: '亚洲' },
+            { id: 'Asia/Dhaka',            label: '达卡',             region: '亚洲' },
+            { id: 'Asia/Bangkok',          label: '曼谷',             region: '亚洲' },
+            { id: 'Asia/Shanghai',         label: '北京 / 上海',      region: '亚洲' },
+            { id: 'Asia/Hong_Kong',        label: '香港',             region: '亚洲' },
+            { id: 'Asia/Taipei',           label: '台北',             region: '亚洲' },
+            { id: 'Asia/Singapore',        label: '新加坡',           region: '亚洲' },
+            { id: 'Asia/Tokyo',            label: '东京',             region: '亚洲' },
+            { id: 'Asia/Seoul',            label: '首尔',             region: '亚洲' },
+            { id: 'Australia/Sydney',      label: '悉尼',             region: '大洋洲' },
+            { id: 'Pacific/Auckland',      label: '奥克兰',           region: '大洋洲' },
+        ];
+
+        function getUtcOffset(tz) {
+            const now = new Date();
+            const formatter = new Intl.DateTimeFormat('en', {
+                timeZone: tz,
+                timeZoneName: 'shortOffset'
+            });
+            const parts = formatter.formatToParts(now);
+            const tzPart = parts.find(p => p.type === 'timeZoneName');
+            return tzPart ? tzPart.value : '';
+        }
+
+        function getCurrentTimeForTz(tz) {
+            const now = new Date();
+            return new Intl.DateTimeFormat('en', {
+                timeZone: tz,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            }).format(now);
+        }
+
+        function updateTimezoneLabel() {
+            const offset = getUtcOffset(selectedTimezone);
+            const tz = timezones.find(t => t.id === selectedTimezone);
+            const cityName = tz ? tz.label : selectedTimezone.split('/').pop().replace(/_/g, ' ');
+            timezoneLabel.textContent = `${offset} · ${cityName}`;
+        }
+
+        function renderTimezoneList(filter = '') {
+            tzList.innerHTML = '';
+            const lowerFilter = filter.toLowerCase();
+            const filtered = timezones.filter(tz =>
+                tz.label.toLowerCase().includes(lowerFilter) ||
+                tz.id.toLowerCase().includes(lowerFilter) ||
+                tz.region.toLowerCase().includes(lowerFilter)
+            );
+
+            filtered.forEach(tz => {
+                const li = document.createElement('li');
+                li.className = 'tz-item' + (tz.id === selectedTimezone ? ' active' : '');
+                li.innerHTML = `
+                    <div>
+                        <span class="tz-name">${tz.label}</span>
+                        <br/>
+                        <span style="font-size:12px;opacity:0.5">${tz.region} · ${getUtcOffset(tz.id)}</span>
+                    </div>
+                    <span class="tz-time">${getCurrentTimeForTz(tz.id)}</span>
+                `;
+                li.addEventListener('click', () => {
+                    selectedTimezone = tz.id;
+                    updateTimezoneLabel();
+                    setDate();
+                    renderTimezoneList(tzSearch.value);
+                });
+                tzList.appendChild(li);
+            });
+        }
+
         function init() {
             createClockFace();
             setInterval(setDate, 1000);
@@ -476,9 +708,12 @@
             toggleModeBtn.innerHTML = icons.sun;
             styleBtn.innerHTML = icons.style;
             aboutBtn.innerHTML = icons.info;
+            timezoneBtn.innerHTML = icons.globe;
 
             analogClock.style.display = 'flex';
             digitalClock.style.display = 'none';
+
+            updateTimezoneLabel();
 
             toggleClockBtn.addEventListener('click', toggleClocks);
             fullscreenBtn.addEventListener('click', toggleFullscreen);
@@ -490,6 +725,24 @@
                 if (e.target === aboutModal) {
                     aboutModal.style.display = 'none';
                 }
+            });
+            timezoneBtn.addEventListener('click', () => {
+                renderTimezoneList(tzSearch.value);
+                timezoneModal.style.display = 'flex';
+                tzSearch.focus();
+            });
+            timezoneModal.addEventListener('click', (e) => {
+                if (e.target === timezoneModal) {
+                    timezoneModal.style.display = 'none';
+                }
+            });
+            tzSearch.addEventListener('input', () => {
+                renderTimezoneList(tzSearch.value);
+            });
+            timezoneLabel.addEventListener('click', () => {
+                renderTimezoneList(tzSearch.value);
+                timezoneModal.style.display = 'flex';
+                tzSearch.focus();
             });
         }
 
