@@ -525,9 +525,11 @@
         
         function setDate() {
             const now = new Date();
-            const seconds = now.getSeconds();
-            const minutes = now.getMinutes();
-            const hours = now.getHours();
+            const tzOptions = { timeZone: selectedTimezone };
+
+            const seconds = parseInt(new Intl.DateTimeFormat('en', { ...tzOptions, second: 'numeric' }).format(now));
+            const minutes = parseInt(new Intl.DateTimeFormat('en', { ...tzOptions, minute: 'numeric' }).format(now));
+            const hours = parseInt(new Intl.DateTimeFormat('en', { ...tzOptions, hour: 'numeric', hour12: false }).format(now));
 
             const secondsDegrees = (seconds / 60) * 360;
             secondHand.style.transform = `rotate(${secondsDegrees}deg)`;
@@ -604,6 +606,98 @@
             styleBtn.title = `Style: ${nextStyle === 'default' ? 'Elegant' : nextStyle.charAt(0).toUpperCase() + nextStyle.slice(1)}`;
         }
 
+        const timezones = [
+            { id: 'Pacific/Midway',        label: '中途岛',           region: '太平洋' },
+            { id: 'Pacific/Honolulu',      label: '夏威夷',           region: '太平洋' },
+            { id: 'America/Anchorage',     label: '安克雷奇',         region: '北美洲' },
+            { id: 'America/Los_Angeles',   label: '洛杉矶',           region: '北美洲' },
+            { id: 'America/Denver',        label: '丹佛',             region: '北美洲' },
+            { id: 'America/Chicago',       label: '芝加哥',           region: '北美洲' },
+            { id: 'America/New_York',      label: '纽约',             region: '北美洲' },
+            { id: 'America/Sao_Paulo',     label: '圣保罗',           region: '南美洲' },
+            { id: 'America/Argentina/Buenos_Aires', label: '布宜诺斯艾利斯', region: '南美洲' },
+            { id: 'Atlantic/South_Georgia', label: '南乔治亚',         region: '大西洋' },
+            { id: 'Atlantic/Azores',       label: '亚速尔群岛',       region: '大西洋' },
+            { id: 'Europe/London',         label: '伦敦',             region: '欧洲' },
+            { id: 'Europe/Paris',          label: '巴黎',             region: '欧洲' },
+            { id: 'Europe/Berlin',         label: '柏林',             region: '欧洲' },
+            { id: 'Europe/Moscow',         label: '莫斯科',           region: '欧洲' },
+            { id: 'Europe/Istanbul',       label: '伊斯坦布尔',       region: '欧洲' },
+            { id: 'Africa/Cairo',          label: '开罗',             region: '非洲' },
+            { id: 'Africa/Johannesburg',   label: '约翰内斯堡',       region: '非洲' },
+            { id: 'Asia/Dubai',            label: '迪拜',             region: '亚洲' },
+            { id: 'Asia/Kolkata',          label: '加尔各答',         region: '亚洲' },
+            { id: 'Asia/Dhaka',            label: '达卡',             region: '亚洲' },
+            { id: 'Asia/Bangkok',          label: '曼谷',             region: '亚洲' },
+            { id: 'Asia/Shanghai',         label: '北京 / 上海',      region: '亚洲' },
+            { id: 'Asia/Hong_Kong',        label: '香港',             region: '亚洲' },
+            { id: 'Asia/Taipei',           label: '台北',             region: '亚洲' },
+            { id: 'Asia/Singapore',        label: '新加坡',           region: '亚洲' },
+            { id: 'Asia/Tokyo',            label: '东京',             region: '亚洲' },
+            { id: 'Asia/Seoul',            label: '首尔',             region: '亚洲' },
+            { id: 'Australia/Sydney',      label: '悉尼',             region: '大洋洲' },
+            { id: 'Pacific/Auckland',      label: '奥克兰',           region: '大洋洲' },
+        ];
+
+        function getUtcOffset(tz) {
+            const now = new Date();
+            const formatter = new Intl.DateTimeFormat('en', {
+                timeZone: tz,
+                timeZoneName: 'shortOffset'
+            });
+            const parts = formatter.formatToParts(now);
+            const tzPart = parts.find(p => p.type === 'timeZoneName');
+            return tzPart ? tzPart.value : '';
+        }
+
+        function getCurrentTimeForTz(tz) {
+            const now = new Date();
+            return new Intl.DateTimeFormat('en', {
+                timeZone: tz,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            }).format(now);
+        }
+
+        function updateTimezoneLabel() {
+            const offset = getUtcOffset(selectedTimezone);
+            const tz = timezones.find(t => t.id === selectedTimezone);
+            const cityName = tz ? tz.label : selectedTimezone.split('/').pop().replace(/_/g, ' ');
+            timezoneLabel.textContent = `${offset} · ${cityName}`;
+        }
+
+        function renderTimezoneList(filter = '') {
+            tzList.innerHTML = '';
+            const lowerFilter = filter.toLowerCase();
+            const filtered = timezones.filter(tz =>
+                tz.label.toLowerCase().includes(lowerFilter) ||
+                tz.id.toLowerCase().includes(lowerFilter) ||
+                tz.region.toLowerCase().includes(lowerFilter)
+            );
+
+            filtered.forEach(tz => {
+                const li = document.createElement('li');
+                li.className = 'tz-item' + (tz.id === selectedTimezone ? ' active' : '');
+                li.innerHTML = `
+                    <div>
+                        <span class="tz-name">${tz.label}</span>
+                        <br/>
+                        <span style="font-size:12px;opacity:0.5">${tz.region} · ${getUtcOffset(tz.id)}</span>
+                    </div>
+                    <span class="tz-time">${getCurrentTimeForTz(tz.id)}</span>
+                `;
+                li.addEventListener('click', () => {
+                    selectedTimezone = tz.id;
+                    updateTimezoneLabel();
+                    setDate();
+                    renderTimezoneList(tzSearch.value);
+                });
+                tzList.appendChild(li);
+            });
+        }
+
         function init() {
             createClockFace();
             setInterval(setDate, 1000);
@@ -614,9 +708,12 @@
             toggleModeBtn.innerHTML = icons.sun;
             styleBtn.innerHTML = icons.style;
             aboutBtn.innerHTML = icons.info;
+            timezoneBtn.innerHTML = icons.globe;
 
             analogClock.style.display = 'flex';
             digitalClock.style.display = 'none';
+
+            updateTimezoneLabel();
 
             toggleClockBtn.addEventListener('click', toggleClocks);
             fullscreenBtn.addEventListener('click', toggleFullscreen);
@@ -628,6 +725,24 @@
                 if (e.target === aboutModal) {
                     aboutModal.style.display = 'none';
                 }
+            });
+            timezoneBtn.addEventListener('click', () => {
+                renderTimezoneList(tzSearch.value);
+                timezoneModal.style.display = 'flex';
+                tzSearch.focus();
+            });
+            timezoneModal.addEventListener('click', (e) => {
+                if (e.target === timezoneModal) {
+                    timezoneModal.style.display = 'none';
+                }
+            });
+            tzSearch.addEventListener('input', () => {
+                renderTimezoneList(tzSearch.value);
+            });
+            timezoneLabel.addEventListener('click', () => {
+                renderTimezoneList(tzSearch.value);
+                timezoneModal.style.display = 'flex';
+                tzSearch.focus();
             });
         }
 
