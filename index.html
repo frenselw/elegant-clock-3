@@ -319,6 +319,85 @@
             color: var(--second-hand-light);
         }
 
+        /* Trail SVG */
+        .trail-svg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+        .trail-svg .trail-glow {
+            filter: blur(3px);
+            opacity: 0.55;
+        }
+        .trail-svg .trail-core {
+            filter: blur(0.4px);
+        }
+
+        /* Timezone display on clock face */
+        .timezone-display {
+            position: absolute;
+            bottom: 22%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 2.2vmin;
+            opacity: 0.5;
+            white-space: nowrap;
+            z-index: 2;
+            color: var(--text-dark);
+            transition: color 0.5s;
+        }
+        body.light-mode .timezone-display { color: var(--text-light); }
+        body.clock-style-luxury .timezone-display { color: #f6e6b5; }
+        body.clock-style-minimal .timezone-display { color: #d4d7dd; }
+        body.clock-style-guofeng .timezone-display { color: #5b3b2a; }
+
+        /* Timezone modal */
+        .timezone-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            z-index: 200;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .timezone-panel {
+            background: var(--face-dark);
+            color: var(--text-dark);
+            padding: 25px 20px;
+            border-radius: 15px;
+            max-width: 380px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+        }
+        body.light-mode .timezone-panel {
+            background: var(--face-light);
+            color: var(--text-light);
+        }
+        .timezone-panel h2 { margin-top: 0; text-align: center; margin-bottom: 15px; }
+        .tz-item {
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .tz-item:hover { background: rgba(128,128,128,0.2); }
+        .tz-item.active { background: rgba(128,128,128,0.25); font-weight: 600; }
+        .tz-name { font-size: 14px; }
+        .tz-time { font-size: 13px; opacity: 0.5; font-variant-numeric: tabular-nums; }
+
     </style>
 </head>
 <body>
@@ -328,6 +407,7 @@
             <div class="hand hour-hand"></div>
             <div class="hand minute-hand"></div>
             <div class="hand second-hand"></div>
+            <div class="timezone-display" id="timezoneDisplay"></div>
         </div>
         <div class="clock digital-clock"></div>
     </div>
@@ -338,6 +418,7 @@
         <button id="toggleModeBtn" title="Toggle Theme"></button>
         <button id="styleBtn" title="Change Style"></button>
         <button id="aboutBtn" title="About"></button>
+        <button id="timezoneBtn" title="Change Timezone"></button>
     </div>
 
     <div id="aboutModal" class="modal-overlay">
@@ -351,6 +432,12 @@
         </div>
     </div>
 
+    <div id="timezoneModal" class="timezone-overlay">
+        <div class="timezone-panel">
+            <h2>Select Timezone</h2>
+            <div id="timezoneList"></div>
+        </div>
+    </div>
 
     <script>
         /*
@@ -369,10 +456,45 @@
         const styleBtn = document.getElementById('styleBtn');
         const aboutBtn = document.getElementById('aboutBtn');
         const aboutModal = document.getElementById('aboutModal');
+        const timezoneBtn = document.getElementById('timezoneBtn');
+        const timezoneModal = document.getElementById('timezoneModal');
+        const timezoneDisplay = document.getElementById('timezoneDisplay');
+        const timezoneList = document.getElementById('timezoneList');
 
         let isAnalog = true;
         let styleIndex = 0;
+        let currentTimezone = null; // null = local time
         const clockStyles = ['default', 'luxury', 'minimal', 'guofeng'];
+
+        const TRAIL_ARC_DEGREES = 90;
+        const TRAIL_SEGMENTS = 30;
+        const TRAIL_TIP_WIDTH = 1.4;
+        let trailSvg = null;
+        let trailPathGlow = null;
+        let trailPathCore = null;
+        let trailGradientGlow = null;
+        let trailGradientCore = null;
+
+        const timezones = [
+            { label: 'Local Time', value: null },
+            { label: 'UTC', value: 'UTC' },
+            { label: 'Pacific Time (Los Angeles)', value: 'America/Los_Angeles' },
+            { label: 'Mountain Time (Denver)', value: 'America/Denver' },
+            { label: 'Central Time (Chicago)', value: 'America/Chicago' },
+            { label: 'Eastern Time (New York)', value: 'America/New_York' },
+            { label: 'Brasília Time', value: 'America/Sao_Paulo' },
+            { label: 'GMT (London)', value: 'Europe/London' },
+            { label: 'CET (Paris)', value: 'Europe/Paris' },
+            { label: 'EET (Athens)', value: 'Europe/Athens' },
+            { label: 'Moscow Time', value: 'Europe/Moscow' },
+            { label: 'GST (Dubai)', value: 'Asia/Dubai' },
+            { label: 'IST (Mumbai)', value: 'Asia/Kolkata' },
+            { label: 'CST (Shanghai)', value: 'Asia/Shanghai' },
+            { label: 'JST (Tokyo)', value: 'Asia/Tokyo' },
+            { label: 'KST (Seoul)', value: 'Asia/Seoul' },
+            { label: 'AEST (Sydney)', value: 'Australia/Sydney' },
+            { label: 'NZST (Auckland)', value: 'Pacific/Auckland' },
+        ];
 
         const icons = {
             analog: `<svg viewBox="0 0 24 24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"></path><path d="M13 7h-2v5.414l3.293 3.293 1.414-1.414L13 11.586z"></path></svg>`,
@@ -382,14 +504,28 @@
             fullscreenExit: `<svg viewBox="0 0 24 24"><path d="M3 9h2V5h4V3H3zm16 0h2V5h-4V3h6v6zM9 21h2v-4h4v-2H9zm12-6h-2v4h-4v2h6z"></path></svg>`,
             sun: `<svg viewBox="0 0 24 24"><path d="M12 2c5.514 0 10 4.486 10 10s-4.486 10-10 10S2 17.514 2 12 6.486 2 12 2zM4 12c0 1.846.634 3.543 1.688 4.898l8.414-8.414A7.962 7.962 0 0 0 12 4c-4.411 0-8 3.589-8 8zm8 8c1.846 0 3.543-.634 4.898-1.688l-8.414-8.414A7.962 7.962 0 0 0 4 12c0 4.411 3.589 8 8 8z"></path></svg>`,
             moon: `<svg viewBox="0 0 24 24"><path d="M12 20a8 8 0 1 1 8-8 8.009 8.009 0 0 1-8 8zm0-18A10 10 0 1 0 22 12 10 10 0 0 0 12 2z"></path></svg>`,
-            info: `<svg viewBox="0 0 24 24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"></path><path d="M11 11h2v6h-2zm0-4h2v2h-2z"></path></svg>`
+            info: `<svg viewBox="0 0 24 24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"></path><path d="M11 11h2v6h-2zm0-4h2v2h-2z"></path></svg>`,
+            globe: `<svg viewBox="0 0 24 24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm7.931 9H16.9a12.1 12.1 0 0 0-1.6-4.6A8.025 8.025 0 0 1 19.931 11zM12 4.04c.9 1.1 1.6 2.4 2 3.96h-4c.4-1.56 1.1-2.86 2-3.96zM4.26 14a7.9 7.9 0 0 1 0-4h3.38a13.1 13.1 0 0 0 0 4H4.26zm.82 2h2.95a12.1 12.1 0 0 0 1.6 4.6A8.025 8.025 0 0 1 5.08 16zm2.95-8H5.08a8.025 8.025 0 0 1 4.55-4.6A12.1 12.1 0 0 0 8.03 8zM12 19.96c-.9-1.1-1.6-2.4-2-3.96h4c-.4 1.56-1.1 2.86-2 3.96zM14.34 14H9.66a11.1 11.1 0 0 1 0-4h4.68a11.1 11.1 0 0 1 0 4zm.39 6.6a12.1 12.1 0 0 0 1.6-4.6h2.95a8.025 8.025 0 0 1-4.55 4.6zm1.6-6.6a13.1 13.1 0 0 0 0-4h3.38a7.9 7.9 0 0 1 0 4h-3.38z"></path></svg>`
         };
         
         function setDate() {
             const now = new Date();
-            const seconds = now.getSeconds();
-            const minutes = now.getMinutes();
-            const hours = now.getHours();
+            let hours, minutes, seconds;
+
+            if (currentTimezone) {
+                const parts = new Intl.DateTimeFormat('en-GB', {
+                    timeZone: currentTimezone,
+                    hour: 'numeric', minute: 'numeric', second: 'numeric',
+                    hour12: false
+                }).formatToParts(now);
+                hours = parseInt(parts.find(p => p.type === 'hour').value);
+                minutes = parseInt(parts.find(p => p.type === 'minute').value);
+                seconds = parseInt(parts.find(p => p.type === 'second').value);
+            } else {
+                hours = now.getHours();
+                minutes = now.getMinutes();
+                seconds = now.getSeconds();
+            }
 
             const secondsDegrees = (seconds / 60) * 360;
             secondHand.style.transform = `rotate(${secondsDegrees}deg)`;
@@ -401,6 +537,9 @@
             hourHand.style.transform = `rotate(${hoursDegrees}deg)`;
 
             digitalClock.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+            updateTrail(seconds);
+            updateTimezoneDisplay();
         }
 
         function getSecondHandColor(seconds) {
@@ -466,8 +605,177 @@
             styleBtn.title = `Style: ${nextStyle === 'default' ? 'Elegant' : nextStyle.charAt(0).toUpperCase() + nextStyle.slice(1)}`;
         }
 
+        function createTrailLine() {
+            trailSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            trailSvg.setAttribute('class', 'trail-svg');
+            trailSvg.setAttribute('viewBox', '0 0 100 100');
+
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+
+            // Gradient for glow layer
+            trailGradientGlow = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+            trailGradientGlow.setAttribute('id', 'trailGradGlow');
+            trailGradientGlow.setAttribute('gradientUnits', 'userSpaceOnUse');
+            for (let i = 0; i <= 8; i++) {
+                const stop = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                stop.setAttribute('offset', `${(i / 8) * 100}%`);
+                stop.setAttribute('stop-opacity', `${i / 8}`);
+                trailGradientGlow.appendChild(stop);
+            }
+            defs.appendChild(trailGradientGlow);
+
+            // Gradient for core layer
+            trailGradientCore = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+            trailGradientCore.setAttribute('id', 'trailGradCore');
+            trailGradientCore.setAttribute('gradientUnits', 'userSpaceOnUse');
+            for (let i = 0; i <= 8; i++) {
+                const stop = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                stop.setAttribute('offset', `${(i / 8) * 100}%`);
+                stop.setAttribute('stop-opacity', `${i / 8}`);
+                trailGradientCore.appendChild(stop);
+            }
+            defs.appendChild(trailGradientCore);
+
+            trailSvg.appendChild(defs);
+
+            trailPathGlow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            trailPathGlow.setAttribute('class', 'trail-glow');
+            trailPathGlow.setAttribute('fill', `url(#trailGradGlow)`);
+            trailPathGlow.setAttribute('stroke', 'none');
+
+            trailPathCore = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            trailPathCore.setAttribute('class', 'trail-core');
+            trailPathCore.setAttribute('fill', `url(#trailGradCore)`);
+            trailPathCore.setAttribute('stroke', 'none');
+
+            trailSvg.appendChild(trailPathGlow);
+            trailSvg.appendChild(trailPathCore);
+            analogClock.appendChild(trailSvg);
+        }
+
+        function buildTaperedPath(cx, cy, radius, currentAngle, arcDeg, tipWidth, steps) {
+            const outerPoints = [];
+            const innerPoints = [];
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const angle = currentAngle - t * (arcDeg / 180) * Math.PI;
+                const hw = tipWidth * 0.5 * Math.pow(1 - t, 1.4);
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+                outerPoints.push({
+                    x: cx + (radius + hw) * sin,
+                    y: cy - (radius + hw) * cos
+                });
+                innerPoints.push({
+                    x: cx + (radius - hw) * sin,
+                    y: cy - (radius - hw) * cos
+                });
+            }
+            let d = `M${outerPoints[0].x.toFixed(3)} ${outerPoints[0].y.toFixed(3)}`;
+            for (let i = 1; i <= steps; i++) {
+                d += ` L${outerPoints[i].x.toFixed(3)} ${outerPoints[i].y.toFixed(3)}`;
+            }
+            for (let i = steps; i >= 0; i--) {
+                d += ` L${innerPoints[i].x.toFixed(3)} ${innerPoints[i].y.toFixed(3)}`;
+            }
+            d += 'Z';
+            return d;
+        }
+
+        function updateTrail(seconds) {
+            const radius = 38;
+            const cx = 50, cy = 50;
+            const currentAngle = (seconds / 60) * 2 * Math.PI;
+
+            // Build tapered shapes
+            const dGlow = buildTaperedPath(cx, cy, radius, currentAngle, TRAIL_ARC_DEGREES, TRAIL_TIP_WIDTH * 1.8, TRAIL_SEGMENTS);
+            const dCore = buildTaperedPath(cx, cy, radius, currentAngle, TRAIL_ARC_DEGREES, TRAIL_TIP_WIDTH * 0.7, TRAIL_SEGMENTS);
+
+            // Gradient geometry
+            const tipX = cx + radius * Math.sin(currentAngle);
+            const tipY = cy - radius * Math.cos(currentAngle);
+            const tailAngle = currentAngle - (TRAIL_ARC_DEGREES / 180) * Math.PI;
+            const tailX = cx + radius * Math.sin(tailAngle);
+            const tailY = cy - radius * Math.cos(tailAngle);
+
+            trailGradientGlow.setAttribute('x1', `${tailX}`);
+            trailGradientGlow.setAttribute('y1', `${tailY}`);
+            trailGradientGlow.setAttribute('x2', `${tipX}`);
+            trailGradientGlow.setAttribute('y2', `${tipY}`);
+            trailGradientCore.setAttribute('x1', `${tailX}`);
+            trailGradientCore.setAttribute('y1', `${tailY}`);
+            trailGradientCore.setAttribute('x2', `${tipX}`);
+            trailGradientCore.setAttribute('y2', `${tipY}`);
+
+            const hue = (seconds / 60) * 360;
+            const stopsGlow = trailGradientGlow.querySelectorAll('stop');
+            stopsGlow.forEach((stop, idx) => {
+                const t = idx / (stopsGlow.length - 1);
+                const segHue = ((hue - (1 - t) * (TRAIL_ARC_DEGREES / 360) * 360) % 360 + 360) % 360;
+                stop.setAttribute('stop-color', `hsl(${segHue}, 90%, 55%)`);
+            });
+            const stopsCore = trailGradientCore.querySelectorAll('stop');
+            stopsCore.forEach((stop, idx) => {
+                const t = idx / (stopsCore.length - 1);
+                const segHue = ((hue - (1 - t) * (TRAIL_ARC_DEGREES / 360) * 360) % 360 + 360) % 360;
+                stop.setAttribute('stop-color', `hsl(${segHue}, 95%, 80%)`);
+            });
+
+            trailPathGlow.setAttribute('d', dGlow);
+            trailPathCore.setAttribute('d', dCore);
+        }
+
+        function updateTimezoneDisplay() {
+            if (currentTimezone) {
+                const tz = timezones.find(t => t.value === currentTimezone);
+                timezoneDisplay.textContent = tz ? tz.label.split('(')[0].trim() : currentTimezone;
+            } else {
+                timezoneDisplay.textContent = '';
+            }
+        }
+
+        function openTimezoneModal() {
+            timezoneModal.style.display = 'flex';
+            renderTimezoneList();
+        }
+
+        function renderTimezoneList() {
+            timezoneList.innerHTML = '';
+            const now = new Date();
+            timezones.forEach(tz => {
+                const item = document.createElement('div');
+                item.className = 'tz-item';
+                const isActive = (tz.value === currentTimezone) || (!tz.value && !currentTimezone);
+                if (isActive) item.classList.add('active');
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'tz-name';
+                nameSpan.textContent = tz.label;
+
+                const timeSpan = document.createElement('span');
+                timeSpan.className = 'tz-time';
+                if (tz.value) {
+                    timeSpan.textContent = new Intl.DateTimeFormat('en-GB', {
+                        timeZone: tz.value, hour: '2-digit', minute: '2-digit', hour12: false
+                    }).format(now);
+                } else {
+                    timeSpan.textContent = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+                }
+
+                item.appendChild(nameSpan);
+                item.appendChild(timeSpan);
+                item.addEventListener('click', () => {
+                    currentTimezone = tz.value;
+                    timezoneModal.style.display = 'none';
+                    setDate();
+                });
+                timezoneList.appendChild(item);
+            });
+        }
+
         function init() {
             createClockFace();
+            createTrailLine();
             setInterval(setDate, 1000);
             setDate();
             
@@ -476,6 +784,7 @@
             toggleModeBtn.innerHTML = icons.sun;
             styleBtn.innerHTML = icons.style;
             aboutBtn.innerHTML = icons.info;
+            timezoneBtn.innerHTML = icons.globe;
 
             analogClock.style.display = 'flex';
             digitalClock.style.display = 'none';
@@ -489,6 +798,12 @@
             aboutModal.addEventListener('click', (e) => {
                 if (e.target === aboutModal) {
                     aboutModal.style.display = 'none';
+                }
+            });
+            timezoneBtn.addEventListener('click', openTimezoneModal);
+            timezoneModal.addEventListener('click', (e) => {
+                if (e.target === timezoneModal) {
+                    timezoneModal.style.display = 'none';
                 }
             });
         }
