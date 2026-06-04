@@ -60,12 +60,26 @@
         }
 
         .analog-clock {
+            position: relative;
             width: 80vmin;
             height: 80vmin;
             background-color: var(--face-dark);
             border-radius: 50%;
             box-shadow: 0 10px 30px rgba(0,0,0,0.25);
             transition: background-color 0.5s;
+            overflow: hidden;
+        }
+        .analog-clock::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: conic-gradient(from 180deg, #FF4B5C, #FF9A56, #FFD166, #7AE582, #4B93FF, #BB4BFF, #FF4B5C);
+            opacity: 0.6;
+            filter: blur(1px);
+            mask: radial-gradient(circle at center, transparent 0%, transparent 85%, black 86%, black 100%);
+            -webkit-mask: radial-gradient(circle at center, transparent 0%, transparent 85%, black 86%, black 100%);
+            pointer-events: none;
         }
         
         body.light-mode .analog-clock {
@@ -129,10 +143,14 @@
 
         .second-hand {
             width: 0.5vmin; height: 40%;
-            background: var(--second-hand-dark);
+            background-color: var(--second-hand-dark);
+            box-shadow: 0 0 15px rgba(255, 75, 92, 0.3);
             z-index: 10;
+            transition: background-color 0.5s ease, box-shadow 0.5s ease, transform 0.1s ease;
         }
-        body.light-mode .second-hand { background: var(--second-hand-light); }
+        body.light-mode .second-hand {
+            background-color: var(--second-hand-light);
+        }
 
         .controls {
             position: fixed;
@@ -225,6 +243,74 @@
             margin-top: 0;
         }
 
+        body.clock-style-luxury {
+            background-color: #11081f;
+        }
+        body.clock-style-luxury .analog-clock {
+            background: radial-gradient(circle at 30% 30%, #674d9e 0%, #231138 60%);
+            box-shadow: 0 20px 50px rgba(116, 65, 178, 0.35);
+        }
+        body.clock-style-luxury .analog-clock::before {
+            background: conic-gradient(from 180deg, #f5c664, #d28f7f, #a368c7, #f5c664);
+            opacity: 0.5;
+        }
+        body.clock-style-luxury .hour-hand,
+        body.clock-style-luxury .minute-hand {
+            background: #f3d88d;
+        }
+        body.clock-style-luxury .number,
+        body.clock-style-luxury .digital-clock {
+            color: #f6e6b5;
+        }
+        body.clock-style-luxury .analog-clock::after {
+            background: #ffd86a;
+        }
+
+        body.clock-style-minimal {
+            background-color: #111418;
+        }
+        body.clock-style-minimal .analog-clock {
+            background: #14171d;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+        }
+        body.clock-style-minimal .analog-clock::before {
+            background: conic-gradient(from 180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05), rgba(255,255,255,0.08));
+            opacity: 0.2;
+        }
+        body.clock-style-minimal .hour-hand,
+        body.clock-style-minimal .minute-hand,
+        body.clock-style-minimal .analog-clock::after {
+            background: #eeeeee;
+        }
+        body.clock-style-minimal .number,
+        body.clock-style-minimal .digital-clock {
+            color: #d4d7dd;
+        }
+
+        body.clock-style-guofeng {
+            background-color: #f6ead9;
+        }
+        body.clock-style-guofeng .analog-clock {
+            background: #f8f0e2;
+            box-shadow: 0 15px 35px rgba(108, 70, 42, 0.16);
+        }
+        body.clock-style-guofeng .analog-clock::before {
+            background: conic-gradient(from 180deg, #c69f6e, #e9d4a5, #f7eddc, #c69f6e);
+            opacity: 0.35;
+        }
+        body.clock-style-guofeng .hour-hand,
+        body.clock-style-guofeng .minute-hand {
+            background: #66422f;
+        }
+        body.clock-style-guofeng .number,
+        body.clock-style-guofeng .digital-clock {
+            color: #5b3b2a;
+            font-family: 'Songti SC', serif;
+        }
+        body.clock-style-guofeng .analog-clock::after {
+            background: #a57349;
+        }
+
         .modal-content a {
             color: var(--second-hand-dark);
         }
@@ -250,6 +336,7 @@
         <button id="toggleClockBtn" title="Toggle Clock"></button>
         <button id="fullscreenBtn" title="Toggle Fullscreen"></button>
         <button id="toggleModeBtn" title="Toggle Theme"></button>
+        <button id="styleBtn" title="Change Style"></button>
         <button id="aboutBtn" title="About"></button>
     </div>
 
@@ -279,15 +366,19 @@
         const toggleClockBtn = document.getElementById('toggleClockBtn');
         const fullscreenBtn = document.getElementById('fullscreenBtn');
         const toggleModeBtn = document.getElementById('toggleModeBtn');
+        const styleBtn = document.getElementById('styleBtn');
         const aboutBtn = document.getElementById('aboutBtn');
         const aboutModal = document.getElementById('aboutModal');
 
         let isAnalog = true;
+        let styleIndex = 0;
+        const clockStyles = ['default', 'luxury', 'minimal', 'guofeng'];
 
         const icons = {
             analog: `<svg viewBox="0 0 24 24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"></path><path d="M13 7h-2v5.414l3.293 3.293 1.414-1.414L13 11.586z"></path></svg>`,
             digital: `<svg viewBox="0 0 24 24"><path d="M7 10h2v4H7zm4 0h2v4h-2zm4 0h2v4h-2z"></path><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"></path></svg>`,
             fullscreenEnter: `<svg viewBox="0 0 24 24"><path d="M5 5h5V3H3v7h2zm5 14H5v-5H3v7h7zm9-14h-5V3h7v7h-2zm-5 14h5v-5h2v7h-7z"></path></svg>`,
+            style: `<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10c0-5.523-4.477-10-10-10zm4.5 12.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm-9 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm4.5-7a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z"></path></svg>`,
             fullscreenExit: `<svg viewBox="0 0 24 24"><path d="M3 9h2V5h4V3H3zm16 0h2V5h-4V3h6v6zM9 21h2v-4h4v-2H9zm12-6h-2v4h-4v2h6z"></path></svg>`,
             sun: `<svg viewBox="0 0 24 24"><path d="M12 2c5.514 0 10 4.486 10 10s-4.486 10-10 10S2 17.514 2 12 6.486 2 12 2zM4 12c0 1.846.634 3.543 1.688 4.898l8.414-8.414A7.962 7.962 0 0 0 12 4c-4.411 0-8 3.589-8 8zm8 8c1.846 0 3.543-.634 4.898-1.688l-8.414-8.414A7.962 7.962 0 0 0 4 12c0 4.411 3.589 8 8 8z"></path></svg>`,
             moon: `<svg viewBox="0 0 24 24"><path d="M12 20a8 8 0 1 1 8-8 8.009 8.009 0 0 1-8 8zm0-18A10 10 0 1 0 22 12 10 10 0 0 0 12 2z"></path></svg>`,
@@ -302,12 +393,24 @@
 
             const secondsDegrees = (seconds / 60) * 360;
             secondHand.style.transform = `rotate(${secondsDegrees}deg)`;
+            secondHand.style.backgroundColor = getSecondHandColor(seconds);
+            secondHand.style.boxShadow = `0 0 15px ${getSecondHandGlow(seconds)}`;
             const minutesDegrees = (minutes / 60) * 360 + (seconds/60)*6;
             minuteHand.style.transform = `rotate(${minutesDegrees}deg)`;
             const hoursDegrees = (hours / 12) * 360 + (minutes/60)*30;
             hourHand.style.transform = `rotate(${hoursDegrees}deg)`;
 
             digitalClock.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function getSecondHandColor(seconds) {
+            const hue = (seconds / 60) * 360;
+            return `hsl(${hue}, 92%, 60%)`;
+        }
+
+        function getSecondHandGlow(seconds) {
+            const hue = (seconds / 60) * 360;
+            return `hsla(${hue}, 92%, 60%, 0.35)`;
         }
 
         function toggleClocks() {
@@ -352,6 +455,17 @@
             }
         }
 
+        function cycleClockStyle() {
+            const previousStyle = clockStyles[styleIndex];
+            document.body.classList.remove(`clock-style-${previousStyle}`);
+            styleIndex = (styleIndex + 1) % clockStyles.length;
+            const nextStyle = clockStyles[styleIndex];
+            if (nextStyle !== 'default') {
+                document.body.classList.add(`clock-style-${nextStyle}`);
+            }
+            styleBtn.title = `Style: ${nextStyle === 'default' ? 'Elegant' : nextStyle.charAt(0).toUpperCase() + nextStyle.slice(1)}`;
+        }
+
         function init() {
             createClockFace();
             setInterval(setDate, 1000);
@@ -360,6 +474,7 @@
             toggleClockBtn.innerHTML = icons.digital;
             fullscreenBtn.innerHTML = icons.fullscreenEnter;
             toggleModeBtn.innerHTML = icons.sun;
+            styleBtn.innerHTML = icons.style;
             aboutBtn.innerHTML = icons.info;
 
             analogClock.style.display = 'flex';
@@ -368,6 +483,7 @@
             toggleClockBtn.addEventListener('click', toggleClocks);
             fullscreenBtn.addEventListener('click', toggleFullscreen);
             toggleModeBtn.addEventListener('click', toggleMode);
+            styleBtn.addEventListener('click', cycleClockStyle);
             document.addEventListener('fullscreenchange', handleFullscreenChange);
             aboutBtn.addEventListener('click', () => { aboutModal.style.display = 'flex'; });
             aboutModal.addEventListener('click', (e) => {
