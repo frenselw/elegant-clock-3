@@ -439,6 +439,45 @@
             color: var(--text-light);
         }
 
+        /* Left Controls (Hand Shape) */
+        .left-controls {
+            position: fixed;
+            top: 50%;
+            left: 3vw;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 100;
+            opacity: 1;
+            visibility: visible;
+            transition: opacity 0.4s ease-in-out, visibility 0.4s ease-in-out;
+        }
+
+        .left-controls.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        /* Hand Shape Label */
+        .hand-shape-label {
+            position: fixed;
+            bottom: 3vh;
+            left: 3vw;
+            font-size: 13px;
+            color: var(--text-dark);
+            opacity: 0.5;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+            transition: color 0.5s, opacity 0.3s;
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        body.light-mode .hand-shape-label {
+            color: var(--text-light);
+        }
+
     </style>
 </head>
 <body>
@@ -451,6 +490,11 @@
         </div>
         <div class="clock digital-clock"></div>
     </div>
+
+    <div class="left-controls" id="leftControls">
+        <button id="handShapeBtn" title="指針形狀: 經典"></button>
+    </div>
+    <div class="hand-shape-label" id="handShapeLabel">經典</div>
 
     <div class="controls">
         <button id="toggleClockBtn" title="Toggle Clock"></button>
@@ -505,9 +549,14 @@
         const tzSearch = document.getElementById('tzSearch');
         const tzList = document.getElementById('tzList');
         const timezoneLabel = document.getElementById('timezoneLabel');
+        const handShapeBtn = document.getElementById('handShapeBtn');
+        const leftControls = document.getElementById('leftControls');
+        const handShapeLabel = document.getElementById('handShapeLabel');
 
         let isAnalog = true;
         let styleIndex = 0;
+        let handShapeIndex = 0;
+        const handShapeNames = ['經典', '菱形', '箭頭'];
         const clockStyles = ['default', 'luxury', 'minimal', 'guofeng'];
         let selectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai';
 
@@ -520,7 +569,8 @@
             sun: `<svg viewBox="0 0 24 24"><path d="M12 2c5.514 0 10 4.486 10 10s-4.486 10-10 10S2 17.514 2 12 6.486 2 12 2zM4 12c0 1.846.634 3.543 1.688 4.898l8.414-8.414A7.962 7.962 0 0 0 12 4c-4.411 0-8 3.589-8 8zm8 8c1.846 0 3.543-.634 4.898-1.688l-8.414-8.414A7.962 7.962 0 0 0 4 12c0 4.411 3.589 8 8 8z"></path></svg>`,
             moon: `<svg viewBox="0 0 24 24"><path d="M12 20a8 8 0 1 1 8-8 8.009 8.009 0 0 1-8 8zm0-18A10 10 0 1 0 22 12 10 10 0 0 0 12 2z"></path></svg>`,
             info: `<svg viewBox="0 0 24 24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"></path><path d="M11 11h2v6h-2zm0-4h2v2h-2z"></path></svg>`,
-            globe: `<svg viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm6.918 6h-3.215a14.9 14.9 0 0 0-1.247-3.668A8.015 8.015 0 0 1 18.918 8zM12 4.04c.702.992 1.268 2.12 1.66 3.34H10.34A13.87 13.87 0 0 1 12 4.04zM4.26 14a7.9 7.9 0 0 1 0-4h3.692a16.4 16.4 0 0 0 0 4H4.26zm.822 2h3.215a14.9 14.9 0 0 0 1.247 3.668A8.015 8.015 0 0 1 5.082 16zm3.215-8H5.082a8.015 8.015 0 0 1 4.462-3.668A14.9 14.9 0 0 0 8.297 8zM12 19.96a13.87 13.87 0 0 1-1.66-3.34h3.32A13.87 13.87 0 0 1 12 19.96zM14.293 14H9.707a14.4 14.4 0 0 1 0-4h4.586a14.4 14.4 0 0 1 0 4zm.493 5.668A14.9 14.9 0 0 0 16.033 16h3.215a8.015 8.015 0 0 1-4.462 3.668zM19.768 14h-3.692a16.4 16.4 0 0 0 0-4h3.692a7.9 7.9 0 0 1 0 4z"></path></svg>`
+            globe: `<svg viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm6.918 6h-3.215a14.9 14.9 0 0 0-1.247-3.668A8.015 8.015 0 0 1 18.918 8zM12 4.04c.702.992 1.268 2.12 1.66 3.34H10.34A13.87 13.87 0 0 1 12 4.04zM4.26 14a7.9 7.9 0 0 1 0-4h3.692a16.4 16.4 0 0 0 0 4H4.26zm.822 2h3.215a14.9 14.9 0 0 0 1.247 3.668A8.015 8.015 0 0 1 5.082 16zm3.215-8H5.082a8.015 8.015 0 0 1 4.462-3.668A14.9 14.9 0 0 0 8.297 8zM12 19.96a13.87 13.87 0 0 1-1.66-3.34h3.32A13.87 13.87 0 0 1 12 19.96zM14.293 14H9.707a14.4 14.4 0 0 1 0-4h4.586a14.4 14.4 0 0 1 0 4zm.493 5.668A14.9 14.9 0 0 0 16.033 16h3.215a8.015 8.015 0 0 1-4.462 3.668zM19.768 14h-3.692a16.4 16.4 0 0 0 0-4h3.692a7.9 7.9 0 0 1 0 4z"></path></svg>`,
+            handShape: `<svg viewBox="0 0 24 24"><path d="M12 2L2 9.5l3.8 11.5h12.4L22 9.5 12 2z"></path></svg>`
         };
         
         function setDate() {
@@ -573,6 +623,7 @@
         function handleFullscreenChange() {
             const isFullscreen = !!document.fullscreenElement;
             controls.classList.toggle('hidden', isFullscreen);
+            leftControls.classList.toggle('hidden', isFullscreen);
             fullscreenBtn.innerHTML = isFullscreen ? icons.fullscreenExit : icons.fullscreenEnter;
         }
 
@@ -604,6 +655,63 @@
                 document.body.classList.add(`clock-style-${nextStyle}`);
             }
             styleBtn.title = `Style: ${nextStyle === 'default' ? 'Elegant' : nextStyle.charAt(0).toUpperCase() + nextStyle.slice(1)}`;
+        }
+
+        // ===== Hand Shape Definitions =====
+        // Each shape defines: width, clipPath, borderRadius for each hand
+        // null means "remove the inline style" (fall back to CSS default)
+        const handShapeDefs = [
+            // 0: Classic (default rounded bars)
+            {
+                hour:   { width: null, clipPath: null, borderRadius: null },
+                minute: { width: null, clipPath: null, borderRadius: null },
+                second: { width: null, clipPath: null, borderRadius: null }
+            },
+            // 1: Diamond (菱形) — pointed at both ends, widest in middle
+            {
+                hour:   { width: '2.2vmin', clipPath: 'polygon(50% 0%, 100% 45%, 50% 100%, 0% 45%)', borderRadius: '0' },
+                minute: { width: '1.8vmin', clipPath: 'polygon(50% 0%, 100% 42%, 50% 100%, 0% 42%)', borderRadius: '0' },
+                second: { width: '1vmin',   clipPath: 'polygon(50% 0%, 100% 38%, 50% 100%, 0% 38%)', borderRadius: '0' }
+            },
+            // 2: Arrow (箭頭) — sharp tip, wide arrowhead, narrow shaft
+            {
+                hour:   { width: '2.4vmin', clipPath: 'polygon(50% 0%, 75% 12%, 60% 22%, 60% 100%, 40% 100%, 40% 22%, 25% 12%)', borderRadius: '0' },
+                minute: { width: '2vmin',   clipPath: 'polygon(50% 0%, 75% 10%, 62% 20%, 62% 100%, 38% 100%, 38% 20%, 25% 10%)', borderRadius: '0' },
+                second: { width: '1.2vmin', clipPath: 'polygon(50% 0%, 80% 8%, 65% 16%, 65% 100%, 35% 100%, 35% 16%, 20% 8%)',   borderRadius: '0' }
+            }
+        ];
+
+        function applyHandShape(index) {
+            const def = handShapeDefs[index];
+            const pairs = [
+                { el: hourHand,   styles: def.hour },
+                { el: minuteHand, styles: def.minute },
+                { el: secondHand, styles: def.second }
+            ];
+            pairs.forEach(({ el, styles }) => {
+                if (styles.width) {
+                    el.style.width = styles.width;
+                } else {
+                    el.style.removeProperty('width');
+                }
+                if (styles.clipPath) {
+                    el.style.clipPath = styles.clipPath;
+                } else {
+                    el.style.removeProperty('clip-path');
+                }
+                if (styles.borderRadius) {
+                    el.style.borderRadius = styles.borderRadius;
+                } else {
+                    el.style.removeProperty('border-radius');
+                }
+            });
+        }
+
+        function cycleHandShape() {
+            handShapeIndex = (handShapeIndex + 1) % handShapeNames.length;
+            applyHandShape(handShapeIndex);
+            handShapeBtn.title = `指針形狀: ${handShapeNames[handShapeIndex]}`;
+            handShapeLabel.textContent = handShapeNames[handShapeIndex];
         }
 
         const timezones = [
@@ -709,6 +817,7 @@
             styleBtn.innerHTML = icons.style;
             aboutBtn.innerHTML = icons.info;
             timezoneBtn.innerHTML = icons.globe;
+            handShapeBtn.innerHTML = icons.handShape;
 
             analogClock.style.display = 'flex';
             digitalClock.style.display = 'none';
@@ -719,6 +828,7 @@
             fullscreenBtn.addEventListener('click', toggleFullscreen);
             toggleModeBtn.addEventListener('click', toggleMode);
             styleBtn.addEventListener('click', cycleClockStyle);
+            handShapeBtn.addEventListener('click', cycleHandShape);
             document.addEventListener('fullscreenchange', handleFullscreenChange);
             aboutBtn.addEventListener('click', () => { aboutModal.style.display = 'flex'; });
             aboutModal.addEventListener('click', (e) => {
