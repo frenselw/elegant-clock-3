@@ -111,6 +111,37 @@
             background: var(--pivot-light);
         }
 
+        .tick {
+            position: absolute;
+            top: 2%;
+            left: 50%;
+            transform-origin: 50% 96%;
+            width: 0.25vmin;
+            height: 46%;
+            pointer-events: none;
+        }
+
+        .tick::before {
+            content: '';
+            display: block;
+            width: 100%;
+            height: 1.2vmin;
+            background: var(--text-dark);
+            opacity: 0.35;
+            border-radius: 1px;
+            transition: background 0.5s, opacity 0.5s;
+        }
+
+        .tick.major::before {
+            height: 2vmin;
+            width: 0.45vmin;
+            opacity: 0.6;
+        }
+
+        body.light-mode .tick::before {
+            background: var(--text-light);
+        }
+
         .number {
             position: absolute;
             font-size: 7vmin;
@@ -583,7 +614,14 @@
         }
 
         function createClockFace() {
-            const radius = 42; 
+            const radius = 42;
+            // Create 60 tick marks
+            for (let i = 0; i < 60; i++) {
+                const tick = document.createElement('div');
+                tick.className = i % 5 === 0 ? 'tick major' : 'tick';
+                tick.style.transform = `translateX(-50%) rotate(${i * 6}deg)`;
+                analogClock.appendChild(tick);
+            }
             for (let i = 1; i <= 12; i++) {
                 const angle = i * 30 * (Math.PI / 180);
                 const number = document.createElement('div');
